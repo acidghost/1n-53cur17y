@@ -1,10 +1,10 @@
 CC=gcc
 CFLAGS=-Wall -Wextra -lcrypto -O3
 
-all: encrypt
-
-encrypt: setup encrypt.c
-	$(CC) $(CFLAGS) -o encrypt encrypt.c
+all: encrypt guessword
 
 setup:
 	./setup.sh
+
+%: %.c setup
+	$(CC) $(CFLAGS) -o $@ $<

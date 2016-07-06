@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #define MAX_LINE 255
 
@@ -23,7 +24,8 @@ int main() {
   char line[MAX_LINE];
   while (!feof(pwd_list) && fgets(line, MAX_LINE - 1, pwd_list)) {
     remove_newline(line);
-    fprintf(stdout, "%s\n", line);
+    char *encrypted = crypt(line, "$1$M9$");
+    fprintf(stdout, "%s\n", encrypted);
   }
 
   return 0;
