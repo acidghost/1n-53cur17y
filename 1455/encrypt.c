@@ -1,6 +1,6 @@
 #include "common.h"
 
-#define SALT "$1$M9"
+#define SALT "$1$M9$"
 
 
 int main() {

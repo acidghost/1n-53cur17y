@@ -1,10 +1,10 @@
 CC=gcc
-CFLAGS=-Wall -Wextra -lcrypto -O3
+CFLAGS=-Wall -Wextra -lcrypto -O3 -std=c99 -I.
 
-all: encrypt guessword
+all: clean setup encrypt guessword
 
 setup:
 	./setup.sh
 
-%: %.c setup
-	$(CC) $(CFLAGS) -o $@ $<
+clean:
+	rm -rf encrypt guessword

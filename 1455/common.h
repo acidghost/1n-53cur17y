@@ -5,11 +5,12 @@
 #define MAX_LINE 255
 
 
-void remove_newline(char *line) {
+unsigned int remove_newline(char *line) {
   for (unsigned int i=0; i<MAX_LINE; i++) {
-    if (line[i] == '\n') {
+    if (line[i] == '\r' || line[i] == '\n') {
       line[i] = '\0';
-      return;
+      return i;
     }
   }
+  return -1;
 }

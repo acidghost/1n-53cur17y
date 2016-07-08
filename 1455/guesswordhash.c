@@ -3,7 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_LST 214972
+
+#define SUBT_HASH 5862067UL
+#define MAX_HASH 18442910239535856459UL
+#define HASHT_SIZE 214972 + 800000
 
 
 typedef unsigned char byte;
@@ -14,11 +17,15 @@ typedef struct user_hash {
   char hash[MAX_LINE];
 } user_hash_t;
 
-typedef struct plain_hash {
-  char *plain;
-  char *hash;
-} plain_hash_t;
 
+unsigned long hash(char *str) {
+  unsigned long hash = 5381;
+  int c;
+  while ((c = *str++)) {
+    hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+  }
+  return hash;
+}
 
 user_hash_t *parse_user_hash(char *line) {
   user_hash_t *uh = (user_hash_t *) malloc(sizeof(user_hash_t));
@@ -36,7 +43,6 @@ user_hash_t *parse_user_hash(char *line) {
     if (line[line_pointer] == '$') {
       found_dolrs++;
       if (found_dolrs == 3) {   // skip 3rd dlr sign
-        // uh->salt[salt_ptr] = '$';
         uh->salt[salt_ptr] = '\0';
         line_pointer++;
         break;
@@ -52,12 +58,6 @@ user_hash_t *parse_user_hash(char *line) {
     uh->hash[hash_pointer] = line[line_pointer];
   }
   return uh;
-}
-
-int compare_plain_hash(const void *ph1, const void *ph2) {
-  plain_hash_t *cph1 = (plain_hash_t *) ph1;
-  plain_hash_t *cph2 = (plain_hash_t *) ph2;
-  return strcmp(cph1->hash, cph2->hash);
 }
 
 int main(int argc, char const *argv[]) {
@@ -86,36 +86,32 @@ int main(int argc, char const *argv[]) {
   user_hash_t *first_uh = parse_user_hash(pwd_line);
 
 
-  // parse dictionary file and build lookup table
+  // parse dictionary file and build hash table
   char dict_line[MAX_LINE];
-  plain_hash_t table[MAX_LST];
-  for (unsigned int i = 0; i < MAX_LST; i++) {
-    if (!feof(dict_file) && fgets(dict_line, MAX_LINE - 1, dict_file)) {
-      unsigned int len = remove_newline(dict_line);
-      table[i] = (plain_hash_t) {
-        .plain=(char *) malloc(len * sizeof(char)),
-        .hash=(char *) malloc(MAX_LINE * sizeof(char))
-      };
-      strncpy(table[i].plain, dict_line, len * sizeof(char));
-      strcpy(table[i].hash, crypt(dict_line, first_uh->salt));
-    } else {
-      fprintf(stderr, "Unexpected end of dictionary file or reading error\n");
-      return -1;
+  char *hash_table[HASHT_SIZE];
+  for (unsigned int i = 0; i < HASHT_SIZE; i++) {
+    hash_table[i] = NULL;
+  }
+  while (!feof(dict_file) && fgets(dict_line, MAX_LINE - 1, dict_file)) {
+    unsigned int len = remove_newline(dict_line);
+    char *encrypted = crypt(dict_line, first_uh->salt);
+    unsigned long h = hash(encrypted) % HASHT_SIZE;
+    if (hash_table[h]) {
+      // fprintf(stderr, "Hash collision for word %s and %s\n", hash_table[h], dict_line);
+      // return -1;
     }
+    // printf("Inserting word %s\n", dict_line);
+    hash_table[h] = (char *) malloc(len * sizeof(char));
+    strncpy(hash_table[h], dict_line, len * sizeof(char));
   }
 
-  qsort(table, MAX_LST, sizeof(plain_hash_t), compare_plain_hash);
 
   // parse passwd file
   while (!feof(pwd_hash_file) && fgets(pwd_line, MAX_LINE - 1, pwd_hash_file)) {
     user_hash_t *uh = parse_user_hash(pwd_line);
-    plain_hash_t ph = (plain_hash_t) {
-      .plain=NULL,
-      .hash=uh->hash
-    };
-    plain_hash_t *res = (plain_hash_t *) bsearch(&ph, table, MAX_LST, sizeof(plain_hash_t), compare_plain_hash);
-    if (res) {
-      printf("%s:%s\n", uh->user, res->plain);
+    unsigned long h = hash(uh->hash) % HASHT_SIZE;
+    if (hash_table[h]) {
+      printf("%s:%s\n", uh->user, hash_table[h]);
     }
     // fprintf(stdout, "%s\t%s\t%s\n", uh->user, uh->salt, uh->hash);
     free(uh);
