@@ -36,7 +36,6 @@ user_hash_t *parse_user_hash(char *line) {
     if (line[line_pointer] == '$') {
       found_dolrs++;
       if (found_dolrs == 3) {   // skip 3rd dlr sign
-        // uh->salt[salt_ptr] = '$';
         uh->salt[salt_ptr] = '\0';
         line_pointer++;
         break;
@@ -54,41 +53,26 @@ user_hash_t *parse_user_hash(char *line) {
   return uh;
 }
 
+
 int compare_plain_hash(const void *ph1, const void *ph2) {
   plain_hash_t *cph1 = (plain_hash_t *) ph1;
   plain_hash_t *cph2 = (plain_hash_t *) ph2;
   return strcmp(cph1->hash, cph2->hash);
 }
 
-int main(int argc, char const *argv[]) {
-  if (argc != 2) {
-    fprintf(stdout, "Usage: %s passwd-path\n", argv[0]);
-    return 0;
-  }
 
+plain_hash_t *build_dictionary(char *filename, char *salt) {
   // open dictionary file
-  FILE *dict_file = fopen("./11575/merged.lst", "r");
+  FILE *dict_file = fopen(filename, "r");
   if (!dict_file) {
     perror("[fopen] dictionary file");
-    return errno;
+    exit(errno);
+    return NULL;
   }
-
-  // open passwd file
-  FILE *pwd_hash_file = fopen(argv[1], "r");
-  if (!pwd_hash_file) {
-    perror("[fopen] hashes file");
-    return errno;
-  }
-
-  // parse first line to get the salt (equal for all)
-  char pwd_line[MAX_LINE];
-  fgets(pwd_line, MAX_LINE - 1, pwd_hash_file);
-  user_hash_t *first_uh = parse_user_hash(pwd_line);
-
 
   // parse dictionary file and build lookup table
   char dict_line[MAX_LINE];
-  plain_hash_t table[MAX_LST];
+  plain_hash_t *table = malloc(MAX_LST * sizeof(plain_hash_t));
   for (unsigned int i = 0; i < MAX_LST; i++) {
     if (!feof(dict_file) && fgets(dict_line, MAX_LINE - 1, dict_file)) {
       unsigned int len = remove_newline(dict_line);
@@ -97,12 +81,38 @@ int main(int argc, char const *argv[]) {
         .hash=(char *) malloc(MAX_LINE * sizeof(char))
       };
       strncpy(table[i].plain, dict_line, len * sizeof(char));
-      strcpy(table[i].hash, crypt(dict_line, first_uh->salt));
+      strcpy(table[i].hash, crypt(dict_line, salt));
     } else {
       fprintf(stderr, "Unexpected end of dictionary file or reading error\n");
-      return -1;
+      exit(EXIT_FAILURE);
+      return NULL;
     }
   }
+
+  fclose(dict_file);
+  return table;
+}
+
+
+int main(int argc, char const *argv[]) {
+  if (argc != 2) {
+    fprintf(stdout, "Usage: %s passwd-path\n", argv[0]);
+    exit(EXIT_FAILURE);
+  }
+
+  // open passwd file
+  FILE *pwd_hash_file = fopen(argv[1], "r");
+  if (!pwd_hash_file) {
+    perror("[fopen] hashes file");
+    exit(errno);
+  }
+
+  // parse first line to get the salt (equal for all)
+  char pwd_line[MAX_LINE];
+  fgets(pwd_line, MAX_LINE - 1, pwd_hash_file);
+  user_hash_t *first_uh = parse_user_hash(pwd_line);
+
+  plain_hash_t *table = build_dictionary("./11575/merged.lst", first_uh->salt);
 
   qsort(table, MAX_LST, sizeof(plain_hash_t), compare_plain_hash);
 
@@ -121,9 +131,7 @@ int main(int argc, char const *argv[]) {
     free(uh);
   }
 
-
-  // close file handlers
   fclose(pwd_hash_file);
-  fclose(dict_file);
-  return 0;
+
+  exit(EXIT_SUCCESS);
 }
