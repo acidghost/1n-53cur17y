@@ -1,6 +1,8 @@
+set flag [lindex $argv 0]
+set ip [lindex $argv 1]
 set pwd [exec cat token.txt]
 puts $pwd
-spawn  ssh flag04@192.168.137.37
+spawn  ssh ${flag}@${ip}
 expect "password:"
 send "${pwd}\n";
 expect "flag04@nebula:~$"
