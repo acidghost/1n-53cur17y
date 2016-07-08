@@ -1,10 +1,10 @@
 set flag [lindex $argv 0]
 set ip [lindex $argv 1]
-set pwd [exec cat token.txt]
-puts $pwd
+set tkfile [lindex $argv 2]
+set pwd [exec cat ${tkfile}]
 spawn  ssh ${flag}@${ip}
 expect "password:"
 send "${pwd}\n";
-expect "flag04@nebula:~$"
+expect "${flag}@nebula:~"
 send "whoami; getflag; exit\n"
 interact
