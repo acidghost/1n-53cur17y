@@ -10,7 +10,7 @@
 
 
 #define BOOT_PATH "/boot/System.map-\0"
-#define KERN_VERS "4.2.0-27-generic"
+#define KERN_VERS "3.13.0-91-generic"
 #define MAX_VERSION_LEN 256
 
 

@@ -1,1 +1,8 @@
-settings.sh
+*.o
+*.ko
+*.cmd
+*.mod.c
+Module.symvers
+modules.order
+.vagrant
+.tmp_versions
